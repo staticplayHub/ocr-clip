@@ -1,21 +1,14 @@
-#!/usr/bin/env python3
-"""
-Screen overlay OCR clipboard tool.
-Press Ctrl+Shift+C to select a region and copy its text.
-Press Ctrl+Shift+Q to quit.
-"""
-
 import tkinter as tk
 
 import pyperclip
 import pytesseract
 from PIL import Image
 import mss
-import mss.tools
 from pynput import keyboard
 
 activate_flag = False
 quit_flag = False
+_root = None
 
 
 def on_activate():
@@ -38,12 +31,9 @@ class Overlay:
         self.top.configure(bg='gray')
 
         with mss.mss() as sct:
-            monitor_0 = sct.monitors[0]
-            left = monitor_0["left"]
-            top = monitor_0["top"]
-            width = monitor_0["width"]
-            height = monitor_0["height"]
-        self.top.geometry(f"{width}x{height}+{left}+{top}")
+            m = sct.monitors[0]
+        self.top.geometry(f"{m['width']}x{m['height']}+{m['left']}+{m['top']}")
+        self._screen = m
 
         self.canvas = tk.Canvas(self.top, bg='gray',
                                 highlightthickness=0, borderwidth=0)
@@ -63,7 +53,6 @@ class Overlay:
         self.start_canvas_y = event.y
         self.start_root_x = event.x_root
         self.start_root_y = event.y_root
-
         if self.rect:
             self.canvas.delete(self.rect)
         self.rect = self.canvas.create_rectangle(
@@ -80,37 +69,34 @@ class Overlay:
             )
 
     def on_mouse_up(self, event):
-        PAD = 8  # extra pixels on each edge to avoid clipping letters
-        with mss.mss() as sct:
-            m = sct.monitors[0]
-            sw, sh = m["left"] + m["width"], m["top"] + m["height"]
-            sl, st = m["left"], m["top"]
+        PAD = 8
+        m = self._screen
+        sl, st = m["left"], m["top"]
+        sw, sh = sl + m["width"], st + m["height"]
         x1 = max(sl, min(self.start_root_x, event.x_root) - PAD)
         y1 = max(st, min(self.start_root_y, event.y_root) - PAD)
         x2 = min(sw, max(self.start_root_x, event.x_root) + PAD)
         y2 = min(sh, max(self.start_root_y, event.y_root) + PAD)
         self.top.withdraw()
-
         try:
-            text = self.capture_and_ocr(x1, y1, x2, y2)
+            text = self._ocr(x1, y1, x2, y2)
             if text.strip():
                 pyperclip.copy(text.strip())
-                print("Text copied to clipboard.")
+                print("Copied to clipboard.")
             else:
-                print("No text found in selection.")
+                print("No text found.")
         except Exception as e:
-            print(f"OCR failed: {e}")
+            print(f"OCR error: {e}")
         finally:
             self.cleanup()
 
-    def capture_and_ocr(self, x1, y1, x2, y2):
+    def _ocr(self, x1, y1, x2, y2):
         if x2 <= x1 or y2 <= y1:
             return ""
         with mss.mss() as sct:
-            monitor = {"left": x1, "top": y1,
-                       "width": x2 - x1, "height": y2 - y1}
-            screenshot = sct.grab(monitor)
-            img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
+            shot = sct.grab({"left": x1, "top": y1,
+                             "width": x2 - x1, "height": y2 - y1})
+            img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
         return pytesseract.image_to_string(img)
 
     def cancel(self):
@@ -121,29 +107,34 @@ class Overlay:
         if self.rect:
             self.canvas.delete(self.rect)
         self.top.destroy()
-        self.top = None
         activate_flag = False
 
 
-def check_activation():
-    global activate_flag, quit_flag
+def _check_activation():
+    global activate_flag, quit_flag, _root
     if quit_flag:
-        root.quit()
+        _root.quit()
         return
     if activate_flag:
-        Overlay(root)
+        Overlay(_root)
         activate_flag = False
-    root.after(100, check_activation)
+    _root.after(100, _check_activation)
+
+
+def main():
+    global _root
+    listener = keyboard.GlobalHotKeys({
+        '<ctrl>+<shift>+c': on_activate,
+        '<ctrl>+<shift>+q': on_quit,
+    })
+    listener.start()
+    print("screen-ocr running. Ctrl+Shift+C to capture, Ctrl+Shift+Q to quit.")
+
+    _root = tk.Tk()
+    _root.withdraw()
+    _root.after(100, _check_activation)
+    _root.mainloop()
 
 
 if __name__ == "__main__":
-    listener = keyboard.GlobalHotKeys({
-        '<ctrl>+<shift>+c': on_activate,
-        '<ctrl>+<shift>+q': on_quit
-    })
-    listener.start()
-
-    root = tk.Tk()
-    root.withdraw()
-    root.after(100, check_activation)
-    root.mainloop()
+    main()

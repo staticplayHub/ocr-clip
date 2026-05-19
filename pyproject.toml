@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "screen-ocr-clipboard"
+version = "0.1.0"
+description = "Drag-select any text on screen and copy it to clipboard via OCR"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "pynput",
+    "pyperclip",
+    "pytesseract",
+    "mss",
+    "pillow",
+]
+
+[project.scripts]
+screen-ocr = "screen_ocr_clipboard.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["screen_ocr_clipboard*"]
