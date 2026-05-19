@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "screen-ocr-clipboard"
+name = "claude-copy-paste-workaround"
 version = "0.1.0"
 description = "Drag-select any text on screen and copy it to clipboard via OCR"
 readme = "README.md"
